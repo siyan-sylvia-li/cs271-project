@@ -1,7 +1,7 @@
 """Utilies for loading MIMIC-III text and phenotype annotations."""
 
 import os
-from typing import Mapping, Tuple
+from typing import Mapping, Sequence, Tuple
 
 import numpy as np
 import pandas as pd
@@ -17,54 +17,88 @@ PHENOTYPE_NAMES = [
     'NON.ADHERENCE', 'NONE', 'OBESITY', 'OTHER.SUBSTANCE.ABUSE',
     'SCHIZOPHRENIA.AND.OTHER.PSYCHIATRIC.DISORDERS', 'UNSURE',
 ]
+CATEGORIES = [
+    'Discharge summary', 'ECG', 'Radiology', 'Nursing/other', 'Echo',
+    'Physician ', 'Nursing', 'Respiratory ', 'Social Work', 'Rehab Services',
+    'Nutrition', 'Case Management ', 'General', 'Pharmacy',
+]
 
 
-def check_class_imbalance(labels: np.array) -> None:
+def check_class_imbalance(dataset_path: str) -> None:
   """Prints class statistics."""
   print('\nLabel statistics:')
+  dataset = pd.read_csv(dataset_path)
+  labels = dataset[PHENOTYPE_NAMES].to_numpy()
   for i, name in enumerate(PHENOTYPE_NAMES):
     class_labels = labels[:, i]
     ones = np.sum(class_labels)
     print(f'- {name} % of 1s: {ones / len(class_labels)}')
 
 
-def extract_notes_labels(dataset_path: str) -> Tuple[np.array, np.array]:
-  """Loads unstructured notes and corresponding phenotype labels."""
+def check_dataset_statistics(dataset_path: str) -> None:
+  """Prints dataset statistics."""
+  print('\nDataset statistics:')
   dataset = pd.read_csv(dataset_path)
   print(f'Number of entries:', len(dataset))
-  print(f'Notes category:', dataset['CATEGORY'].unique())
-  notes = dataset['TEXT'].to_numpy()
-  avg_note_length = sum([len(note.split(' ')) for note in notes]) / len(notes)
-  print(f'Approx. average note length: {avg_note_length}')
-  labels = dataset[PHENOTYPE_NAMES].to_numpy()
+  print(f'Notes category:', list(dataset['CATEGORY'].unique()))
+  print('Approx. average note length:')
+  for category, sub_df in dataset.groupby('CATEGORY'):
+    notes = sub_df['TEXT'].to_numpy()
+    avg_note_length = sum([len(note.split(' ')) for note in notes]) / len(notes)
+    print(f'- {category}: {avg_note_length}')
+
+
+def get_data(
+    dataset: pd.DataFrame,
+    categories: Sequence[str],
+    subject_id: int,
+    hadm_id: int
+) -> Tuple[np.array, np.array]:
+  """Loads unstructured notes and corresponding phenotype labels."""
+  print(subject_id, hadm_id)
+  sub_dataset = dataset.loc[
+      (dataset['CATEGORY'].isin(categories)) &
+      (dataset['SUBJECT_ID'] == subject_id) &
+      (dataset['HADM_ID'] == hadm_id)]
+  print(sub_dataset)
+  notes = sub_dataset['TEXT'].to_numpy()
+  labels = sub_dataset[PHENOTYPE_NAMES].to_numpy()
   return notes, labels
 
 
 def split_dataset(
-    notes: np.array, labels: np.array, train_split: float = 0.7,
+    dataset_path: str,
+    train_split: float = 0.7,
     val_split: float = 0.1,
 ) -> Mapping[str, np.array]:
-  """Splits notes and labels into train/val/test splits."""
-  num_train = int(len(notes) * train_split)
-  num_val = int(len(notes) * val_split)
-  print('\nDataset statistics:'
+  """Splits (SUBJECT_ID, HADM_ID) pairs into train/val/test splits."""
+  dataset = pd.read_csv(dataset_path)
+  samples = dataset.drop_duplicates(
+      subset=['SUBJECT_ID', 'HADM_ID'])[['SUBJECT_ID', 'HADM_ID']].to_numpy()
+  num_train = int(len(samples) * train_split)
+  num_val = int(len(samples) * val_split)
+  print('\nDataset splits:'
       f'\n#Train: {num_train}'
       f'\n#Val: {num_val}'
-      f'\n#Test: {len(notes) - num_train - num_val}')
-  shuffled_indices = np.random.permutation(len(notes))
-  shuffled_notes = notes[shuffled_indices]
-  shuffled_labels = labels[shuffled_indices]
+      f'\n#Test: {len(samples) - num_train - num_val}')
+  shuffled_indices = np.random.permutation(len(samples))
+  shuffled_samples = samples[shuffled_indices]
   return {
-      'train_x': shuffled_notes[: num_train],
-      'train_y': shuffled_labels[: num_train],
-      'val_x': shuffled_notes[num_train: num_train + num_val],
-      'val_y': shuffled_labels[num_train: num_train + num_val],
-      'test_x': shuffled_notes[num_train + num_val:],
-      'test_y': shuffled_labels[num_train + num_val:]
+      'train': shuffled_samples[: num_train],
+      'val': shuffled_samples[num_train: num_train + num_val],
+      'test': shuffled_samples[num_train + num_val:],
   }
 
 
 if __name__ == '__main__':
-  notes, labels = extract_notes_labels(DATASET_PATH)
-  check_class_imbalance(labels)
-  data = split_dataset(notes, labels, train_split=0.7, val_split=0.1)
+  check_class_imbalance(DATASET_PATH)
+  check_dataset_statistics(DATASET_PATH)
+  data_ids = split_dataset(DATASET_PATH, train_split=0.7, val_split=0.1)
+
+  notes, labels = get_data(
+      pd.read_csv(DATASET_PATH),
+      categories=['Discharge summary'],
+      subject_id=data_ids['train'][0][0],
+      hadm_id=data_ids['train'][0][1])
+  # print(notes.shape, labels.shape)
+  # print(notes[0][:50], labels)
