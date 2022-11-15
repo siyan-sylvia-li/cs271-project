@@ -1,10 +1,11 @@
 """Utilies for loading MIMIC-III text and phenotype annotations."""
-
+import json
 import os
 from typing import Mapping, Sequence, Tuple
 
 import numpy as np
 import pandas as pd
+import pickle
 
 
 DATA_DIR = 'data/'
@@ -55,12 +56,12 @@ def get_data(
     hadm_id: int
 ) -> Tuple[np.array, np.array]:
   """Loads unstructured notes and corresponding phenotype labels."""
-  print(subject_id, hadm_id)
+  # print(subject_id, hadm_id)
   sub_dataset = dataset.loc[
       (dataset['CATEGORY'].isin(categories)) &
       (dataset['SUBJECT_ID'] == subject_id) &
       (dataset['HADM_ID'] == hadm_id)]
-  print(sub_dataset)
+  # print(sub_dataset)
   notes = sub_dataset['TEXT'].to_numpy()
   labels = sub_dataset[PHENOTYPE_NAMES].to_numpy()
   return notes, labels
@@ -94,6 +95,8 @@ if __name__ == '__main__':
   check_class_imbalance(DATASET_PATH)
   check_dataset_statistics(DATASET_PATH)
   data_ids = split_dataset(DATASET_PATH, train_split=0.7, val_split=0.1)
+
+  pickle.dump(data_ids, open("data_ids.p", "wb+"))
 
   notes, labels = get_data(
       pd.read_csv(DATASET_PATH),
