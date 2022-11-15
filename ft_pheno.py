@@ -113,9 +113,9 @@ if __name__ == "__main__":
     tokenizer = BertTokenizer.from_pretrained(args.bert_name)
     # tokenized_datasets = dataset.map(tokenize_function, batched=True)
     data_ids_total = pickle.load(open("data_ids.p", "rb"))
-    train_set = data_ids_total['train'][:16]
-    val_set = data_ids_total['val'][:8]
-    test_set = data_ids_total['test'][:8]
+    train_set = data_ids_total['train']
+    val_set = data_ids_total['val']
+    test_set = data_ids_total['test']
 
     train_data = PhenoDataset(train_set, tokenizer)
     val_data = PhenoDataset(val_set, tokenizer)
