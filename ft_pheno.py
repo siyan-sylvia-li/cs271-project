@@ -3,7 +3,7 @@ import pickle
 
 import tqdm
 from transformers import get_scheduler
-from transformers import BertTokenizer, BertForSequenceClassification, BertModel
+from transformers import AutoTokenizer, BertForSequenceClassification, BertModel
 from typing import List
 import torch
 import torch.nn as nn
@@ -52,6 +52,7 @@ def eval():
     with torch.inference_mode():
         for data, label in val_loader:
             data = {k: v.to(DEVICE) for k, v in data.items()}
+            label = label.to(DEVICE)
             logits = model(data)
             losses += ce(logits, label)
             all_accs += get_acc(logits, label)
@@ -106,11 +107,12 @@ if __name__ == "__main__":
     parser.add_argument("--batch_size", type=int, default=8)
     parser.add_argument("--epochs", type=int, default=10)
     parser.add_argument("--bert_name", default="bert-base-cased")
+    parser.add_argument("--lr", type=float, default=1e-4)
     args = parser.parse_args()
     model = PhenoPredictor(14, args.bert_name)
     model.to(DEVICE)
 
-    tokenizer = BertTokenizer.from_pretrained(args.bert_name)
+    tokenizer = AutoTokenizer.from_pretrained(args.bert_name)
     # tokenized_datasets = dataset.map(tokenize_function, batched=True)
     data_ids_total = pickle.load(open("data_ids.p", "rb"))
     train_set = data_ids_total['train']

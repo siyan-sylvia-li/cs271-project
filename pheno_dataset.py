@@ -7,7 +7,7 @@ from torch.utils.data import Dataset
 from data_util import get_data
 import pandas as pd
 import os
-from transformers import BertTokenizer
+from transformers import AutoTokenizer
 
 DATA_DIR = 'data/'
 DATASET_PATH = os.path.join(DATA_DIR, 'dataset.csv')
@@ -23,7 +23,7 @@ class PhenoDataset(Dataset):
     def __init__(self, data_ids, tokenizer):
         self.data_ids = data_ids
         self.tokenizer = tokenizer
-        self.max_len = self.tokenizer.model_max_length
+        self.max_len = 128
 
     def tokenize_function(self, examples):
         return self.tokenizer(examples["text"], padding="max_length", truncation=True)
@@ -46,14 +46,13 @@ class PhenoDataset(Dataset):
             truncation=True,
             stride=self.max_len // 2,
             padding="max_length",
-            return_tensors="pt",
         )
 
         to_pad = 15 - len(final_note['input_ids'])
 
         for k in final_note:
-            padding = torch.zeros((to_pad, self.max_len), dtype=int)
-            final_note[k] = torch.cat([final_note[k], padding])
+            padding = torch.zeros((to_pad, self.max_len), dtype=torch.long)
+            final_note[k] = torch.cat([torch.LongTensor(final_note[k]), padding])
 
         final_note.update({"orig_len": 15 - to_pad})
 
