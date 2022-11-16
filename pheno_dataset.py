@@ -1,29 +1,30 @@
-import copy
+import os
 import pickle
 
-import numpy
+import numpy as np
+import pandas as pd
 import torch
 from torch.utils.data import Dataset
+
 from data_util import get_data
-import pandas as pd
-import os
-from transformers import AutoTokenizer
+
 
 DATA_DIR = 'data/'
-DATASET_PATH = os.path.join(DATA_DIR, 'dataset.csv')
+DATASET_PATH = os.path.join(DATA_DIR, 'discharge_tokenized_dataset.csv')
+NUM_CHUNKS = 15
 
 
-def process_text(text):
-    text = text.replace("\n", " ")
-    text_splts = text.split(" ")
-    text_splts = [x for x in text_splts if len(x)]
-    return " ".join(text_splts)
+# def process_text(text):
+#     text = text.replace("\n", " ")
+#     text_splts = text.split(" ")
+#     text_splts = [x for x in text_splts if len(x)]
+#     return " ".join(text_splts)
 
 class PhenoDataset(Dataset):
-    def __init__(self, data_ids, tokenizer):
+    def __init__(self, data_ids, tokenizer, max_len=128):
         self.data_ids = data_ids
         self.tokenizer = tokenizer
-        self.max_len = 128
+        self.max_len = max_len
 
     def tokenize_function(self, examples):
         return self.tokenizer(examples["text"], padding="max_length", truncation=True)
@@ -38,30 +39,48 @@ class PhenoDataset(Dataset):
             subject_id=self.data_ids[item][0],
             hadm_id=self.data_ids[item][1])
         notes = notes.tolist()
-        notes = [process_text(t) for t in notes]
 
         final_note = self.tokenizer(
             notes,
             max_length=self.max_len,
             truncation=True,
-            stride=self.max_len // 2,
+            stride=self.max_len // 8,
             padding="max_length",
+            return_overflowing_tokens=True,
         )
 
-        to_pad = 15 - len(final_note['input_ids'])
+        if len(final_note['input_ids']) < NUM_CHUNKS:
+            to_pad = NUM_CHUNKS - len(final_note['input_ids'])
 
-        for k in final_note:
-            padding = torch.zeros((to_pad, self.max_len), dtype=torch.long)
-            final_note[k] = torch.cat([torch.LongTensor(final_note[k]), padding])
+            for k in final_note:
+                if k == 'overflow_to_sample_mapping':
+                    padding = torch.zeros((to_pad), dtype=torch.long)
+                else:
+                    padding = torch.zeros((to_pad, self.max_len), dtype=torch.long)
+                final_note[k] = torch.cat([torch.LongTensor(final_note[k]), padding])
 
-        final_note.update({"orig_len": 15 - to_pad})
+            final_note.update({"orig_len": NUM_CHUNKS - to_pad})
+        elif len(final_note['input_ids']) > NUM_CHUNKS:
+            selected_chunks = np.sort(np.random.choice(
+                range(len(final_note['input_ids'])), size=NUM_CHUNKS, replace=False))
 
+            for k in final_note:
+                if k == 'overflow_to_sample_mapping':
+                    final_note[k] = torch.LongTensor(
+                        [final_note[k][i] for i in selected_chunks])
+                else:
+                    final_note[k] = torch.vstack(
+                        [torch.LongTensor(final_note[k][i]) for i in selected_chunks])
+
+            final_note.update({"orig_len": NUM_CHUNKS})
+        else:
+            final_note.update({"orig_len": NUM_CHUNKS})
         # print("NOTES", len(notes), final_note['input_ids'].shape)
         # if len(notes) != len(final_note['input_ids']):
         #     print(len(notes), len(final_note['input_ids']))
             # print(final_note["input_ids"][:3])
 
-        return final_note, numpy.argmax(labels[0])
+        return final_note, np.argmax(labels[0])
 
 
 #         if len(encoded_note['input_ids']) <= self.max_len:
