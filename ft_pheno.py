@@ -20,7 +20,7 @@ import utils
 
 DEVICE = "cuda:0" if torch.cuda.is_available() else "cpu"
 MAX_LENGTH = 500
-ce = torch.nn.CrossEntropyLoss()
+be = torch.nn.BCELoss()
 THRESHOLD = 0.5
 RESULT_DIR = "results"
 
@@ -42,8 +42,7 @@ def parameters_to_finetune(model: nn.Module, mode: str) -> List:
 
 
 def get_loss(logits: torch.tensor, targets: torch.tensor) -> torch.tensor:
-    ce = torch.nn.CrossEntropyLoss()
-    return ce(logits, targets)
+    return be(logits, targets)
 
 
 def get_acc(logits, targets):
@@ -76,7 +75,7 @@ def eval():
             data = {k: v.to(DEVICE) for k, v in data.items()}
             label = label.to(DEVICE)
             logits = model(data)
-            losses += ce(logits, label)
+            losses += be(logits, label)
             all_accs += get_acc(logits, label)
             for f1_type, f1 in get_f1(logits, label).items():
                 f1s[f1_type] += f1
@@ -108,7 +107,7 @@ def ft_bert():
             data = {k: v.to(DEVICE) for k, v in data.items()}
             label = label.to(DEVICE)
             outputs = model(data)
-            loss = ce(outputs, label)
+            loss = be(outputs, label)
             loss.backward()
             tr_losses += loss.detach().item()
             optimizer.step()
