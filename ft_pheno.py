@@ -1,6 +1,7 @@
 from collections import defaultdict
 import json
 import pickle
+import os
 
 from sklearn import metrics
 import tqdm
@@ -12,13 +13,16 @@ import torch.nn as nn
 import argparse
 from torch.utils.data import DataLoader
 from datasets import load_dataset
+
 from pheno_model import PhenoPredictor
 from pheno_dataset import PhenoDataset
+import utils
 
 DEVICE = "cuda:0" if torch.cuda.is_available() else "cpu"
 MAX_LENGTH = 500
 ce = torch.nn.CrossEntropyLoss()
 THRESHOLD = 0.5
+RESULT_DIR = "results"
 
 
 def tokenize_function(examples):
@@ -80,7 +84,7 @@ def eval():
     losses = losses / len(val_loader)
     for f1_type in f1s:
         f1s[f1_type] = f1s[f1_type] / len(val_loader)
-    return {"acc": all_accs, "loss": losses, **f1s}
+    return {"acc": all_accs, "loss": losses.item(), **f1s}
 
 
 def ft_bert():
@@ -91,6 +95,8 @@ def ft_bert():
     lr_scheduler = get_scheduler(
         name="linear", optimizer=optimizer, num_warmup_steps=0, num_training_steps=num_training_steps
     )
+
+    early_stopping = utils.EarlyStopping()
 
     pbar = tqdm.tqdm(range(num_training_steps))
     metrics = defaultdict(list)
@@ -133,18 +139,34 @@ def ft_bert():
         metrics["eval_f1s_micro"].append(metrs["f1_micro"])
         metrics["eval_f1s_weighted"].append(metrs["f1_weighted"])
         pbar.set_description(f'Eval acc: {metrs["acc"]:.04f}, Eval loss: {metrs["loss"]:.04f}, Eval F1: {metrs["f1_weighted"]:.04f}')
-    return metrics
+
+        early_stopping(-metrics['eval_f1s_weighted'][-1], model)
+        if args.early_stopping and early_stopping.early_stop:
+            print("Early stopping...")
+            break
+    return metrics, early_stopping.get_best_model()
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
+    parser.add_argument("--exp_name", type=str, default="bert")
     parser.add_argument("--ft_mode", default="classifier")
     parser.add_argument("--batch_size", type=int, default=8)
     parser.add_argument("--epochs", type=int, default=10)
     parser.add_argument("--bert_name", default="bert-base-cased")
     parser.add_argument("--lr", type=float, default=1e-4)
     parser.add_argument("--baseline_bert", action="store_true")
+    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--early_stopping", action="store_true")
     args = parser.parse_args()
+
+    torch.manual_seed(args.seed)
+    torch.cuda.manual_seed_all(args.seed)
+
+    result_dir = os.path.join(RESULT_DIR, args.exp_name)
+    if not os.path.exists(result_dir):
+        os.makedirs(result_dir)
+
     model = PhenoPredictor(
         14, args.bert_name, use_pretrained=(not args.baseline_bert))
     model.to(DEVICE)
@@ -152,9 +174,9 @@ if __name__ == "__main__":
     tokenizer = AutoTokenizer.from_pretrained(args.bert_name)
     # tokenized_datasets = dataset.map(tokenize_function, batched=True)
     data_ids_total = pickle.load(open("data_ids.p", "rb"))
-    train_set = data_ids_total['train']
-    val_set = data_ids_total['val']
-    test_set = data_ids_total['test']
+    train_set = data_ids_total['train'][:4]
+    val_set = data_ids_total['val'][:4]
+    test_set = data_ids_total['test'][:4]
 
     train_data = PhenoDataset(train_set, tokenizer)
     val_data = PhenoDataset(val_set, tokenizer)
@@ -163,6 +185,14 @@ if __name__ == "__main__":
     val_loader = DataLoader(val_data, shuffle=True, batch_size=args.batch_size)
     test_loader = DataLoader(test_data, shuffle=True, batch_size=args.batch_size)
     print("Begin training")
-    mets = ft_bert()
-    torch.save(model, "pheno_ckpt.pt")
-    json.dump(mets, open("results.json", "w+"))
+    mets, best_model = ft_bert()
+
+    arg_id = ''
+    for k, v in args.__dict__.items():
+        arg_id += f'{k}={v}__'
+    with open(os.path.join(result_dir, f'{arg_id}.json'), 'w') as f:
+        json.dump(mets, f)
+    torch.save(
+        best_model,
+        os.path.join(result_dir, f"{arg_id}_best.pt"))
+    torch.save(model, os.path.join(result_dir, f"{arg_id}_final.pt"))
