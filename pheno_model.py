@@ -18,6 +18,7 @@ class PhenoPredictor(torch.nn.Module):
             self.bert = BertModel(config)
         self.classifier = torch.nn.Linear(self.bert.config.hidden_size, self.n_class)
         self.sigmoid = torch.nn.Sigmoid()
+        self.device = "cuda:0" if torch.cuda.is_available() else "cpu"
 
     def forward(self, x):
         # print(x['input_ids'].shape)
@@ -26,9 +27,9 @@ class PhenoPredictor(torch.nn.Module):
             # iterate through the batches
             o_len = x['orig_len'][i]
             # print(o_len)
-            inp_ids = x['input_ids'][i, :o_len, :]
-            att_masks = x['attention_mask'][i, :o_len, :]
-            tok_type = x['token_type_ids'][i, :o_len, :]
+            inp_ids = x['input_ids'][i, :o_len, :].to(self.device)
+            att_masks = x['attention_mask'][i, :o_len, :].to(self.device)
+            tok_type = x['token_type_ids'][i, :o_len, :].to(self.device)
             outputs = self.bert(input_ids=inp_ids, attention_mask=att_masks, token_type_ids=tok_type)
             # print(outputs[0].shape)
             cls_tokens = outputs[0][:, 0, :].squeeze(1)
