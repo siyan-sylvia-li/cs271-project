@@ -14,6 +14,7 @@ import argparse
 from torch.utils.data import DataLoader
 from datasets import load_dataset
 
+import data_util
 from pheno_model import PhenoPredictor
 from pheno_dataset import PhenoDataset
 import utils
@@ -48,28 +49,25 @@ def get_loss(logits: torch.tensor, targets: torch.tensor) -> torch.tensor:
 def get_acc(logits, targets):
     binarized_logits = (logits > THRESHOLD).long()
     acc_mask = (binarized_logits == targets).type(torch.uint8)
-    return torch.sum(acc_mask).item() / (targets.shape[0] * targets.shape[1])
+    return torch.sum(acc_mask, dim=0) / targets.shape[0]
 
 
 def get_f1(logits, targets):
     preds = (logits > THRESHOLD).long()
-    f1_macro = metrics.f1_score(
-        targets.flatten(), preds.flatten(), average='macro')
-    f1_micro = metrics.f1_score(
-        targets.flatten(), preds.flatten(), average='micro')
-    f1_weighted = metrics.f1_score(
-        targets.flatten(), preds.flatten(), average='weighted')
-    return {
-        'f1_macro': f1_macro,
-        'f1_micro': f1_micro,
-        'f1_weighted': f1_weighted,
-    }
+    results = defaultdict(dict)
+    for i, p in enumerate(data_util.PHENOTYPE_NAMES):
+        for f1_type in ['macro', 'micro', 'weighted']:
+            f1 = metrics.f1_score(
+                targets[:, i], preds[:, i], average=f1_type)
+            results[p][f'f1_{f1_type}'] = f1
+    return results
 
 
 def eval():
-    all_accs = 0
+    all_accs = torch.zeros(len(data_util.PHENOTYPE_NAMES))
     losses = 0
-    f1s = defaultdict(float)
+    eval_f1s = defaultdict(lambda: defaultdict(int))
+    avg_f1s = 0
     with torch.inference_mode():
         for data, label in val_loader:
             data = {k: v.to(DEVICE) for k, v in data.items()}
@@ -79,13 +77,21 @@ def eval():
             total_acc = get_acc(logits.detach().cpu(), label.detach().cpu())
             all_accs += total_acc
             f1s = get_f1(logits.detach().cpu(), label.detach().cpu())
-            for f1_type, f1 in f1s.items():
-                f1s[f1_type] += f1
+            weighted_f1s = 0
+            for p, p_f1s in f1s.items():
+                for f1_type, f1 in p_f1s.items():
+                    eval_f1s[p][f1_type] += f1
+                weighted_f1s += f1s[p]['f1_weighted']
+            avg_weighted_f1 = weighted_f1s / len(f1s)
+            avg_f1s += avg_weighted_f1
     all_accs = all_accs / len(val_loader)
     losses = losses / len(val_loader)
-    for f1_type in f1s:
-        f1s[f1_type] = f1s[f1_type] / len(val_loader)
-    return {"acc": all_accs, "loss": losses.item(), **f1s}
+    results = dict()
+    for p, p_f1s in eval_f1s.items():
+        for f1_type, f1 in p_f1s.items():
+            results[f"{p}_{f1_type}"] = eval_f1s[p][f1_type] / len(val_loader)
+    avg_f1s = avg_f1s / len(val_loader)
+    return {"acc": all_accs, "loss": losses.item(), "avg_f1_weighted": avg_f1s, **results}
 
 
 def ft_bert():
@@ -103,8 +109,9 @@ def ft_bert():
     metrics = defaultdict(list)
     for epoch in range(args.epochs):
         tr_losses = 0
-        tr_accs = 0
-        tr_f1s = defaultdict(float)
+        tr_accs = torch.zeros(len(data_util.PHENOTYPE_NAMES))
+        tr_f1s = defaultdict(lambda: defaultdict(int))
+        tr_avg_f1s = 0
         for data, label in train_loader:
             data = {k: v.to(DEVICE) for k, v in data.items()}
             label = label.to(DEVICE)
@@ -121,27 +128,36 @@ def ft_bert():
                 total_acc = get_acc(logits.detach().cpu(), label.detach().cpu())
                 tr_accs += total_acc
                 f1s = get_f1(logits.detach().cpu(), label.detach().cpu())
-                for f1_type, f1 in f1s.items():
-                    tr_f1s[f1_type] += f1
-            pbar.set_description(f'Fine-tuning acc: {total_acc:.04f}, loss: {loss:.04f}, F1: {f1s["f1_weighted"]:.04f}')
+                weighted_f1s = 0
+                for p, p_f1s in f1s.items():
+                    for f1_type, f1 in p_f1s.items():
+                        tr_f1s[p][f1_type] += f1
+                    weighted_f1s += f1s[p]['f1_weighted']
+                avg_weighted_f1 = weighted_f1s / len(f1s)
+                tr_avg_f1s += avg_weighted_f1
+            pbar.set_description(f'Fine-tuning acc: {total_acc.mean().item():.04f}, loss: {loss:.04f}, F1: {avg_weighted_f1:.04f}')
         tr_losses = tr_losses / len(train_loader)
         tr_accs = tr_accs / len(train_loader)
-        for f1_type in tr_f1s:
-            tr_f1s[f1_type] = tr_f1s[f1_type] / len(train_loader)
-        metrs = eval()
-        metrics["tr_loss"].append(tr_losses)
-        metrics["tr_accs"].append(tr_accs)
-        metrics["tr_f1s_macro"].append(tr_f1s["f1_macro"])
-        metrics["tr_f1s_micro"].append(tr_f1s["f1_micro"])
-        metrics["tr_f1s_weighted"].append(tr_f1s["f1_weighted"])
-        metrics["eval_accs"].append(metrs["acc"])
-        metrics["eval_loss"].append(metrs["loss"])
-        metrics["eval_f1s_macro"].append(metrs["f1_macro"])
-        metrics["eval_f1s_micro"].append(metrs["f1_micro"])
-        metrics["eval_f1s_weighted"].append(metrs["f1_weighted"])
-        pbar.set_description(f'Eval acc: {metrs["acc"]:.04f}, Eval loss: {metrs["loss"]:.04f}, Eval F1: {metrs["f1_weighted"]:.04f}')
+        for p, p_f1s in tr_f1s.items():
+            for f1_type, f1 in p_f1s.items():
+                tr_f1s[p][f1_type] = tr_f1s[p][f1_type] / len(train_loader)
+                metrics[f"tr_{p}_{f1_type}"].append(tr_f1s[p][f1_type])
+        tr_avg_f1s = tr_avg_f1s / len(train_loader)
 
-        early_stopping(-metrics['eval_f1s_weighted'][-1], model)
+        metrs = eval()
+        for i, p in enumerate(data_util.PHENOTYPE_NAMES):
+            metrics[f"tr_{p}_accs"].append(tr_accs[i].item())
+            metrics[f"eval_{p}_accs"].append(metrs["acc"][i].item())
+        metrics["tr_loss"].append(tr_losses)
+        metrics["eval_loss"].append(metrs["loss"])
+        metrics["tr_avg_f1s_weighted"].append(tr_avg_f1s)
+        for p, p_f1s in tr_f1s.items():
+            for f1_type, _ in p_f1s.items():
+                metrics[f"eval_{p}_{f1_type}"].append(metrs[f"{p}_{f1_type}"])
+        metrics["eval_avg_f1s_weighted"].append(metrs["avg_f1_weighted"])
+        pbar.set_description(f'Eval acc: {metrs["acc"].mean().item():.04f}, Eval loss: {metrs["loss"]:.04f}, Eval F1: {metrs["avg_f1_weighted"]:.04f}')
+
+        early_stopping(-metrics['eval_avg_f1s_weighted'][-1], model)
         if args.early_stopping and early_stopping.early_stop:
             print("Early stopping...")
             break
