@@ -76,8 +76,10 @@ def eval():
             label = label.to(DEVICE)
             logits = model(data)
             losses += be(logits, label)
-            all_accs += get_acc(logits, label)
-            for f1_type, f1 in get_f1(logits, label).items():
+            total_acc = get_acc(logits.detach().cpu(), label.detach().cpu())
+            all_accs += total_acc
+            f1s = get_f1(logits.detach().cpu(), label.detach().cpu())
+            for f1_type, f1 in f1s.items():
                 f1s[f1_type] += f1
     all_accs = all_accs / len(val_loader)
     losses = losses / len(val_loader)
@@ -116,9 +118,9 @@ def ft_bert():
             pbar.update(1)
             with torch.inference_mode():
                 logits = model(data)
-                total_acc = get_acc(logits, label)
+                total_acc = get_acc(logits.detach().cpu(), label.detach().cpu())
                 tr_accs += total_acc
-                f1s = get_f1(logits, label)
+                f1s = get_f1(logits.detach().cpu(), label.detach().cpu())
                 for f1_type, f1 in f1s.items():
                     tr_f1s[f1_type] += f1
             pbar.set_description(f'Fine-tuning acc: {total_acc:.04f}, loss: {loss:.04f}, F1: {f1s["f1_weighted"]:.04f}')
@@ -173,9 +175,9 @@ if __name__ == "__main__":
     tokenizer = AutoTokenizer.from_pretrained(args.bert_name)
     # tokenized_datasets = dataset.map(tokenize_function, batched=True)
     data_ids_total = pickle.load(open("data_ids.p", "rb"))
-    train_set = data_ids_total['train'][:4]
-    val_set = data_ids_total['val'][:4]
-    test_set = data_ids_total['test'][:4]
+    train_set = data_ids_total['train']
+    val_set = data_ids_total['val']
+    test_set = data_ids_total['test']
 
     train_data = PhenoDataset(train_set, tokenizer)
     val_data = PhenoDataset(val_set, tokenizer)
