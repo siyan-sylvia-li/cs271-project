@@ -80,7 +80,7 @@ class PhenoDataset(Dataset):
         #     print(len(notes), len(final_note['input_ids']))
             # print(final_note["input_ids"][:3])
 
-        return final_note, np.argmax(labels[0])
+        return final_note, torch.FloatTensor(labels[0])
 
 
 #         if len(encoded_note['input_ids']) <= self.max_len:

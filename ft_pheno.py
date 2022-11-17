@@ -1,6 +1,8 @@
+from collections import defaultdict
 import json
 import pickle
 
+from sklearn import metrics
 import tqdm
 from transformers import get_scheduler
 from transformers import AutoTokenizer, BertForSequenceClassification, BertModel
@@ -16,6 +18,7 @@ from pheno_dataset import PhenoDataset
 DEVICE = "cuda:0" if torch.cuda.is_available() else "cpu"
 MAX_LENGTH = 500
 ce = torch.nn.CrossEntropyLoss()
+THRESHOLD = 0.5
 
 
 def tokenize_function(examples):
@@ -40,15 +43,30 @@ def get_loss(logits: torch.tensor, targets: torch.tensor) -> torch.tensor:
 
 
 def get_acc(logits, targets):
-    print(logits, targets)
-    logit_max = torch.argmax(logits, dim=-1)
-    acc_mask = (logit_max == targets).type(torch.uint8)
-    return torch.sum(acc_mask).item() / targets.size(dim=0)
+    binarized_logits = (logits > THRESHOLD).long()
+    acc_mask = (binarized_logits == targets).type(torch.uint8)
+    return torch.sum(acc_mask).item() / (targets.shape[0] * targets.shape[1])
+
+
+def get_f1(logits, targets):
+    preds = (logits > THRESHOLD).long()
+    f1_macro = metrics.f1_score(
+        targets.flatten(), preds.flatten(), average='macro')
+    f1_micro = metrics.f1_score(
+        targets.flatten(), preds.flatten(), average='micro')
+    f1_weighted = metrics.f1_score(
+        targets.flatten(), preds.flatten(), average='weighted')
+    return {
+        'f1_macro': f1_macro,
+        'f1_micro': f1_micro,
+        'f1_weighted': f1_weighted,
+    }
 
 
 def eval():
     all_accs = 0
     losses = 0
+    f1s = defaultdict(float)
     with torch.inference_mode():
         for data, label in val_loader:
             data = {k: v.to(DEVICE) for k, v in data.items()}
@@ -56,9 +74,13 @@ def eval():
             logits = model(data)
             losses += ce(logits, label)
             all_accs += get_acc(logits, label)
+            for f1_type, f1 in get_f1(logits, label).items():
+                f1s[f1_type] += f1
     all_accs = all_accs / len(val_loader)
     losses = losses / len(val_loader)
-    return {"acc": all_accs, "loss": losses}
+    for f1_type in f1s:
+        f1s[f1_type] = f1s[f1_type] / len(val_loader)
+    return {"acc": all_accs, "loss": losses, **f1s}
 
 
 def ft_bert():
@@ -71,10 +93,11 @@ def ft_bert():
     )
 
     pbar = tqdm.tqdm(range(num_training_steps))
-    metrics = {"tr_loss": [], "tr_accs": [], "eval_loss": [], "eval_accs": []}
+    metrics = defaultdict(list)
     for epoch in range(args.epochs):
         tr_losses = 0
         tr_accs = 0
+        tr_f1s = defaultdict(float)
         for data, label in train_loader:
             data = {k: v.to(DEVICE) for k, v in data.items()}
             label = label.to(DEVICE)
@@ -87,17 +110,29 @@ def ft_bert():
             optimizer.zero_grad()
             pbar.update(1)
             with torch.inference_mode():
-                total_acc = get_acc(model(data), label)
+                logits = model(data)
+                total_acc = get_acc(logits, label)
                 tr_accs += total_acc
-            pbar.set_description(f'Fine-tuning acc: {total_acc:.04f}, loss: {loss:.04f}')
+                f1s = get_f1(logits, label)
+                for f1_type, f1 in f1s.items():
+                    tr_f1s[f1_type] += f1
+            pbar.set_description(f'Fine-tuning acc: {total_acc:.04f}, loss: {loss:.04f}, F1: {f1s["f1_weighted"]:.04f}')
         tr_losses = tr_losses / len(train_loader)
         tr_accs = tr_accs / len(train_loader)
+        for f1_type in tr_f1s:
+            tr_f1s[f1_type] = tr_f1s[f1_type] / len(train_loader)
         metrs = eval()
         metrics["tr_loss"].append(tr_losses)
         metrics["tr_accs"].append(tr_accs)
+        metrics["tr_f1s_macro"].append(tr_f1s["f1_macro"])
+        metrics["tr_f1s_micro"].append(tr_f1s["f1_micro"])
+        metrics["tr_f1s_weighted"].append(tr_f1s["f1_weighted"])
         metrics["eval_accs"].append(metrs["acc"])
         metrics["eval_loss"].append(metrs["loss"])
-        pbar.set_description(f'Eval acc: {metrs["acc"]:.04f}, Eval loss: {metrs["loss"]:.04f}')
+        metrics["eval_f1s_macro"].append(metrs["f1_macro"])
+        metrics["eval_f1s_micro"].append(metrs["f1_micro"])
+        metrics["eval_f1s_weighted"].append(metrs["f1_weighted"])
+        pbar.set_description(f'Eval acc: {metrs["acc"]:.04f}, Eval loss: {metrs["loss"]:.04f}, Eval F1: {metrs["f1_weighted"]:.04f}')
     return metrics
 
 

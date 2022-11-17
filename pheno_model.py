@@ -8,7 +8,7 @@ class PhenoPredictor(torch.nn.Module):
         self.n_class = n_class
         self.bert = BertModel.from_pretrained(bert_name)
         self.classifier = torch.nn.Linear(self.bert.config.hidden_size, self.n_class)
-        self.softmax = torch.nn.Softmax(dim=-1)
+        self.sigmoid = torch.nn.Sigmoid()
 
     def forward(self, x):
         # print(x['input_ids'].shape)
@@ -26,7 +26,7 @@ class PhenoPredictor(torch.nn.Module):
             # cls_tokens = torch.mean(cls_tokens, dim=0)
             # print("CLS TOKEN 1", cls_tokens.shape)
             cls_tokens = self.classifier(cls_tokens)
-            # cls_tokens = self.softmax(cls_tokens)
+            cls_tokens = self.sigmoid(cls_tokens)
             # print("CLS TOKEN 2", cls_tokens.shape)
             cls_tokens = torch.mean(cls_tokens, dim=0)
             final_output.append(cls_tokens.unsqueeze(0))
