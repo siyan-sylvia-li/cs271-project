@@ -74,6 +74,8 @@ class PhenoDataset(Dataset):
 
             final_note.update({"orig_len": NUM_CHUNKS})
         else:
+            for k in final_note:
+                final_note[k] = torch.tensor(final_note[k])
             final_note.update({"orig_len": NUM_CHUNKS})
         # print("NOTES", len(notes), final_note['input_ids'].shape)
         # if len(notes) != len(final_note['input_ids']):

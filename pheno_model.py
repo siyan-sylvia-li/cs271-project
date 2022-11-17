@@ -1,12 +1,21 @@
 import torch
-from transformers import BertTokenizer, BertModel
+from transformers import BertConfig, BertTokenizer, BertModel
+
+# https://huggingface.co/huggingfans/bert-mini/blob/main/config.json with modified vocab_size
+BERT_CONFIG_FILE = 'config/bert-mini.json'
 
 
 class PhenoPredictor(torch.nn.Module):
-    def __init__(self, n_class, bert_name):
+    def __init__(self, n_class, bert_name, use_pretrained=True):
         super().__init__()
         self.n_class = n_class
-        self.bert = BertModel.from_pretrained(bert_name)
+        if use_pretrained:
+            self.bert = BertModel.from_pretrained(bert_name)
+            self.bert.config.save_pretrained(save_directory='config')
+        else:
+            # Create BERT model without using pretrained weights.
+            config = BertConfig.from_pretrained(BERT_CONFIG_FILE)
+            self.bert = BertModel(config)
         self.classifier = torch.nn.Linear(self.bert.config.hidden_size, self.n_class)
         self.sigmoid = torch.nn.Sigmoid()
 

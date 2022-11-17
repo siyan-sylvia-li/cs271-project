@@ -143,8 +143,10 @@ if __name__ == "__main__":
     parser.add_argument("--epochs", type=int, default=10)
     parser.add_argument("--bert_name", default="bert-base-cased")
     parser.add_argument("--lr", type=float, default=1e-4)
+    parser.add_argument("--baseline_bert", action="store_true")
     args = parser.parse_args()
-    model = PhenoPredictor(14, args.bert_name)
+    model = PhenoPredictor(
+        14, args.bert_name, use_pretrained=(not args.baseline_bert))
     model.to(DEVICE)
 
     tokenizer = AutoTokenizer.from_pretrained(args.bert_name)
