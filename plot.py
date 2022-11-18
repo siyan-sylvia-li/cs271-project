@@ -37,11 +37,14 @@ def parse_attrs(fname: str):
 def plot_metric_over_epochs(results, metric, fig_dir, line_types):
     fig, ax = plt.subplots()
     plt.title(name_mapping[metric])
-    for id_plt, metric_values in results.items():
+    models = sorted(list(results.keys()))
+    for id_plt in models:
+        metric_values = results[id_plt]
         values = metric_values[metric]
         lt = line_types[id_plt.split(" - ")[0]]
         ax.plot(range(len(values)), values, label=id_plt, ls=lt)
     ax.legend(bbox_to_anchor=(1.85, 0.5), loc='right')
+    plt.xlabel('Epoch')
     plt.savefig(os.path.join(fig_dir, f'{metric}.png'), dpi=300, bbox_inches='tight')
 
 
@@ -56,7 +59,7 @@ def plot_metric_over_phenotypes(results, is_train, metric, fig_dir):
     frame1.axes.xaxis.set_visible(False)
     frame1.axes.yaxis.set_visible(False)
     plt.box(False)
-    models = list(results.keys())
+    models = sorted(list(results.keys()))
     np.random.seed(9)
     colors = np.random.rand(len(models), 3).tolist()
     for i, p in enumerate(data_util.PHENOTYPE_NAMES):
