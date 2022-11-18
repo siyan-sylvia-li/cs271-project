@@ -2,6 +2,7 @@ import glob
 import json
 import os.path
 
+import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -21,6 +22,10 @@ name_mapping = {
     "classifier": "finetune pred. head",
     "lastbert": "finetune last layer + pred. head",
 }
+# font = {
+#     'weight': 'bold',
+# }
+# matplotlib.rc('font', **font)
 
 
 def parse_attrs(fname: str):
@@ -48,7 +53,7 @@ def plot_metric_over_epochs(results, metric, fig_dir, line_types):
     plt.savefig(os.path.join(fig_dir, f'{metric}.png'), dpi=300, bbox_inches='tight')
 
 
-def plot_metric_over_phenotypes(results, is_train, metric, fig_dir):
+def plot_metric_over_phenotypes(results, is_train, metric, fig_dir, hatch_types):
     """Plots final metric value of all models on different phenotypes.
 
     Args:
@@ -62,12 +67,13 @@ def plot_metric_over_phenotypes(results, is_train, metric, fig_dir):
     models = sorted(list(results.keys()))
     np.random.seed(9)
     colors = np.random.rand(len(models), 3).tolist()
+    hatches = [hatch_types[model.split(' - ')[0]] for model in models]
     for i, p in enumerate(data_util.PHENOTYPE_NAMES):
         full_metric_name = f'{"tr" if is_train else "eval"}_{p}_{metric}'
         ax = fig.add_subplot(3, 5, i + 1)
         ax.bar(
             models, [results[m][full_metric_name][-1] for m in models],
-            color=colors, alpha=0.5)
+            color=colors, alpha=0.5, hatch=hatches)
         ax.title.set_text(p)
         # if i < 10:
         x_axis = ax.axes.get_xaxis()
@@ -76,7 +82,7 @@ def plot_metric_over_phenotypes(results, is_train, metric, fig_dir):
         #     plt.xticks(rotation=30, ha='right')
         ax.set_ylim(0.5, 1)
     handles = [plt.Rectangle((0,0),1,1, color=colors[i], alpha=0.5) for i in range(len(colors))]
-    plt.legend(handles, models, bbox_to_anchor=(2.2, 0.5), loc='right')
+    plt.legend(handles, models, bbox_to_anchor=(2.1, 0.5), loc='right')
     plt.savefig(os.path.join(fig_dir, f'{"tr" if is_train else "eval"}_{metric}_by_phenotypes.png'), dpi=300, bbox_inches='tight')
 
 
@@ -86,7 +92,12 @@ if __name__ == "__main__":
     line_types = {
         "bert-mini": "-",
         "bert-base-cased": "-.",
-        "bio+clinical-bert:": "--",
+        "bio+clinicalbert": "--",
+    }
+    hatch_types = {
+        "bert-mini": "-",
+        "bert-base-cased": "/",
+        "bio+clinicalbert": "\\",
     }
     results = {}
     for f in glob.glob(os.path.join(RESULT_DIR, "*/*.json")):
@@ -103,7 +114,7 @@ if __name__ == "__main__":
     plot_metric_over_epochs(results, "tr_avg_f1s_weighted", FIG_DIR, line_types)
     plot_metric_over_epochs(results, "eval_avg_f1s_weighted", FIG_DIR, line_types)
 
-    plot_metric_over_phenotypes(results, is_train=False, metric="accs", fig_dir=FIG_DIR)
-    plot_metric_over_phenotypes(results, is_train=False, metric="f1_weighted", fig_dir=FIG_DIR)
-    plot_metric_over_phenotypes(results, is_train=False, metric="f1_macro", fig_dir=FIG_DIR)
-    plot_metric_over_phenotypes(results, is_train=False, metric="f1_micro", fig_dir=FIG_DIR)
+    plot_metric_over_phenotypes(results, is_train=False, metric="accs", fig_dir=FIG_DIR, hatch_types=hatch_types)
+    plot_metric_over_phenotypes(results, is_train=False, metric="f1_weighted", fig_dir=FIG_DIR, hatch_types=hatch_types)
+    plot_metric_over_phenotypes(results, is_train=False, metric="f1_macro", fig_dir=FIG_DIR, hatch_types=hatch_types)
+    plot_metric_over_phenotypes(results, is_train=False, metric="f1_micro", fig_dir=FIG_DIR, hatch_types=hatch_types)
