@@ -1,3 +1,4 @@
+from collections import defaultdict
 import glob
 import json
 import os.path
@@ -18,14 +19,10 @@ name_mapping = {
     "f1_weighted": "F1 Weighted",
     "f1_macro": "F1 Macro",
     "f1_micro": "F1 Micro",
-    "all": "finetune all",
-    "classifier": "finetune pred. head",
-    "lastbert": "finetune last layer + pred. head",
+    "all": "train all",
+    "classifier": "train pred. head",
+    "lastbert": "train last layer + pred. head",
 }
-# font = {
-#     'weight': 'bold',
-# }
-# matplotlib.rc('font', **font)
 
 
 def parse_attrs(fname: str):
@@ -40,6 +37,10 @@ def parse_attrs(fname: str):
 
 
 def plot_metric_over_epochs(results, metric, fig_dir, line_types):
+    font = {
+        'size': 14,
+    }
+    matplotlib.rc('font', **font)
     fig, ax = plt.subplots()
     plt.title(name_mapping[metric])
     models = sorted(list(results.keys()))
@@ -48,7 +49,8 @@ def plot_metric_over_epochs(results, metric, fig_dir, line_types):
         values = metric_values[metric]
         lt = line_types[id_plt.split(" - ")[0]]
         ax.plot(range(len(values)), values, label=id_plt, ls=lt)
-    ax.legend(bbox_to_anchor=(1.85, 0.5), loc='right')
+        # print(id_plt, f'{values[-1]:.03f}')
+    ax.legend(bbox_to_anchor=(2.2, 0.5), loc='right')
     plt.xlabel('Epoch')
     plt.savefig(os.path.join(fig_dir, f'{metric}.png'), dpi=300, bbox_inches='tight')
 
@@ -58,8 +60,12 @@ def plot_metric_over_phenotypes(results, is_train, metric, fig_dir, hatch_types)
 
     Args:
         metric: Can be one of [f1_macro, f1_micro, f1_weighted, accs]."""
+    font = {
+        'size': 15,
+    }
+    matplotlib.rc('font', **font)
     fig = plt.figure(figsize=(30, 15))
-    fig.suptitle(f'{"Train" if is_train else "Evaluation"} {name_mapping[metric]}', fontsize=20)
+    fig.suptitle(f'{"Train" if is_train else "Evaluation"} {name_mapping[metric]}', fontsize=28)
     frame1 = plt.gca()
     frame1.axes.xaxis.set_visible(False)
     frame1.axes.yaxis.set_visible(False)
@@ -68,21 +74,26 @@ def plot_metric_over_phenotypes(results, is_train, metric, fig_dir, hatch_types)
     np.random.seed(9)
     colors = np.random.rand(len(models), 3).tolist()
     hatches = [hatch_types[model.split(' - ')[0]] for model in models]
+    # accs = defaultdict(float)
     for i, p in enumerate(data_util.PHENOTYPE_NAMES):
         full_metric_name = f'{"tr" if is_train else "eval"}_{p}_{metric}'
         ax = fig.add_subplot(3, 5, i + 1)
         ax.bar(
             models, [results[m][full_metric_name][-1] for m in models],
             color=colors, alpha=0.5, hatch=hatches)
-        ax.title.set_text(p)
-        # if i < 10:
+        ax.set_title(" ".join(p.split('.')).title(), pad=15)
         x_axis = ax.axes.get_xaxis()
         x_axis.set_visible(False)
-        # else:
-        #     plt.xticks(rotation=30, ha='right')
         ax.set_ylim(0.5, 1)
-    handles = [plt.Rectangle((0,0),1,1, color=colors[i], alpha=0.5) for i in range(len(colors))]
-    plt.legend(handles, models, bbox_to_anchor=(2.1, 0.5), loc='right')
+    #     for m in models:
+    #         accs[m] += results[m][full_metric_name][-1]
+    # for k in accs:
+    #     accs[k] = accs[k] / len(data_util.PHENOTYPE_NAMES)
+    # for k, v in accs.items():
+    #     print(k, f'{v:.03f}')
+    handles = [plt.Rectangle(
+        (0,0),1,1, facecolor=colors[i], edgecolor='black', alpha=0.5, hatch=hatches[i]) for i in range(len(colors))]
+    plt.legend(handles, models, bbox_to_anchor=(2.5, 0.5), loc='right')
     plt.savefig(os.path.join(fig_dir, f'{"tr" if is_train else "eval"}_{metric}_by_phenotypes.png'), dpi=300, bbox_inches='tight')
 
 
@@ -95,9 +106,9 @@ if __name__ == "__main__":
         "bio+clinicalbert": "--",
     }
     hatch_types = {
-        "bert-mini": "-",
-        "bert-base-cased": "/",
-        "bio+clinicalbert": "\\",
+        "bert-mini": "+",
+        "bert-base-cased": "x",
+        "bio+clinicalbert": ".",
     }
     results = {}
     for f in glob.glob(os.path.join(RESULT_DIR, "*/*.json")):
@@ -109,10 +120,10 @@ if __name__ == "__main__":
         result_json = json.load(open(f))
         results.update({id_plt: result_json})
 
-    plot_metric_over_epochs(results, "tr_loss", FIG_DIR, line_types)
-    plot_metric_over_epochs(results, "eval_loss", FIG_DIR, line_types)
-    plot_metric_over_epochs(results, "tr_avg_f1s_weighted", FIG_DIR, line_types)
-    plot_metric_over_epochs(results, "eval_avg_f1s_weighted", FIG_DIR, line_types)
+    # plot_metric_over_epochs(results, "tr_loss", FIG_DIR, line_types)
+    # plot_metric_over_epochs(results, "eval_loss", FIG_DIR, line_types)
+    # plot_metric_over_epochs(results, "tr_avg_f1s_weighted", FIG_DIR, line_types)
+    # plot_metric_over_epochs(results, "eval_avg_f1s_weighted", FIG_DIR, line_types)
 
     plot_metric_over_phenotypes(results, is_train=False, metric="accs", fig_dir=FIG_DIR, hatch_types=hatch_types)
     plot_metric_over_phenotypes(results, is_train=False, metric="f1_weighted", fig_dir=FIG_DIR, hatch_types=hatch_types)
