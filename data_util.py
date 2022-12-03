@@ -34,6 +34,7 @@ def check_class_imbalance(dataset_path: str) -> None:
     class_labels = labels[:, i]
     ones = np.sum(class_labels)
     print(f'- {name} % of 1s: {ones / len(class_labels)}')
+    print(f"""{" ".join(name.split('.')).lower()} & {ones / len(class_labels):.03f}""")
 
 
 def check_dataset_statistics(dataset_path: str) -> None:

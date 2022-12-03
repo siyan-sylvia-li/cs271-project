@@ -30,16 +30,26 @@ def tokenize_function(examples):
     return tokenizer(examples["text"], padding="max_length", truncation=True)
 
 
-def parameters_to_finetune(model: nn.Module, mode: str) -> List:
+def parameters_to_finetune(
+    model: nn.Module, mode: str, lstm_head: bool,
+) -> List:
     if mode == 'all':
         return list(model.parameters())
     elif mode == 'classifier':
         classifier_weights = model.get_submodule("classifier")
-        return list(classifier_weights.parameters())
+        params = list(classifier_weights.parameters())
+        if lstm_head:
+            lstm_weights = model.get_submodule("lstm_ensemble")
+            params += list(lstm_weights.parameters())
+        return params
     elif mode == 'lastbert':
         classifier = model.get_submodule("classifier")
         last_encoder = model.get_submodule("bert.encoder.layer.11")
-        return list(classifier.parameters()) + list(last_encoder.parameters())
+        params = list(classifier.parameters()) + list(last_encoder.parameters())
+        if lstm_head:
+            lstm_weights = model.get_submodule("lstm_ensemble")
+            params += list(lstm_weights.parameters())
+        return params
 
 
 def get_loss(logits: torch.tensor, targets: torch.tensor) -> torch.tensor:
@@ -98,7 +108,8 @@ def ft_bert():
     model.train()
     num_training_steps = args.epochs * len(train_loader)
 
-    optimizer = torch.optim.Adam(parameters_to_finetune(model, args.ft_mode), lr=1e-4)
+    optimizer = torch.optim.Adam(
+        parameters_to_finetune(model, args.ft_mode, args.lstm_head), lr=1e-4)
     lr_scheduler = get_scheduler(
         name="linear", optimizer=optimizer, num_warmup_steps=0, num_training_steps=num_training_steps
     )
@@ -168,6 +179,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--exp_name", type=str, default="bert")
     parser.add_argument("--ft_mode", default="classifier")
+    parser.add_argument("--lstm_head", action="store_true")
     parser.add_argument("--batch_size", type=int, default=8)
     parser.add_argument("--epochs", type=int, default=10)
     parser.add_argument("--bert_name", default="bert-base-cased")
@@ -185,7 +197,8 @@ if __name__ == "__main__":
         os.makedirs(result_dir)
 
     model = PhenoPredictor(
-        14, args.bert_name, use_pretrained=(not args.baseline_bert))
+        14, args.bert_name, use_pretrained=(not args.baseline_bert),
+        lstm_head=args.lstm_head)
     model.to(DEVICE)
 
     tokenizer = AutoTokenizer.from_pretrained(args.bert_name)
