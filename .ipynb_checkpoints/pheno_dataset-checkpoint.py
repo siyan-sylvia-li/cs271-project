@@ -1,26 +1,33 @@
-import copy
+import os
 import pickle
 
-import numpy
+import numpy as np
+import pandas as pd
 import torch
 from torch.utils.data import Dataset
+
 from data_util import get_data
+<<<<<<< HEAD
 import pandas as pd
 import os
 from transformers import AutoTokenizer
+=======
+
+>>>>>>> 6cc5ddd5d991b475787fbebf156976820631f98c
 
 DATA_DIR = 'data/'
-DATASET_PATH = os.path.join(DATA_DIR, 'dataset.csv')
+DATASET_PATH = os.path.join(DATA_DIR, 'discharge_tokenized_dataset.csv')
+NUM_CHUNKS = 15
 
 
-def process_text(text):
-    text = text.replace("\n", " ")
-    text_splts = text.split(" ")
-    text_splts = [x for x in text_splts if len(x)]
-    return " ".join(text_splts)
+# def process_text(text):
+#     text = text.replace("\n", " ")
+#     text_splts = text.split(" ")
+#     text_splts = [x for x in text_splts if len(x)]
+#     return " ".join(text_splts)
 
 class PhenoDataset(Dataset):
-    def __init__(self, data_ids, tokenizer):
+    def __init__(self, data_ids, tokenizer, max_len=128):
         self.data_ids = data_ids
         self.tokenizer = tokenizer
         self.max_len = 128
@@ -38,13 +45,12 @@ class PhenoDataset(Dataset):
             subject_id=self.data_ids[item][0],
             hadm_id=self.data_ids[item][1])
         notes = notes.tolist()
-        notes = [process_text(t) for t in notes]
 
         final_note = self.tokenizer(
             notes,
             max_length=self.max_len,
             truncation=True,
-            stride=self.max_len // 2,
+            stride=self.max_len // 8,
             padding="max_length",
         )
 
@@ -61,7 +67,7 @@ class PhenoDataset(Dataset):
         #     print(len(notes), len(final_note['input_ids']))
             # print(final_note["input_ids"][:3])
 
-        return final_note, numpy.argmax(labels[0])
+        return final_note, torch.FloatTensor(labels[0])
 
 
 #         if len(encoded_note['input_ids']) <= self.max_len:
