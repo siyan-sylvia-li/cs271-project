@@ -220,6 +220,7 @@ if __name__ == "__main__":
     arg_id = ''
     for k, v in args.__dict__.items():
         arg_id += f'{k}={v}__'
+    arg_id = arg_id.replace('/', '-')
     with open(os.path.join(result_dir, f'{arg_id}.json'), 'w') as f:
         json.dump(mets, f)
     torch.save(
