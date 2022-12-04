@@ -7,13 +7,9 @@ import torch
 from torch.utils.data import Dataset
 
 from data_util import get_data
-<<<<<<< HEAD
 import pandas as pd
 import os
 from transformers import AutoTokenizer
-=======
-
->>>>>>> 6cc5ddd5d991b475787fbebf156976820631f98c
 
 DATA_DIR = 'data/'
 DATASET_PATH = os.path.join(DATA_DIR, 'discharge_tokenized_dataset.csv')

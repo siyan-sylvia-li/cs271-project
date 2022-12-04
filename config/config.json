@@ -1,11 +1,7 @@
 {
-  "_name_or_path": "bert-base-cased",
-  "architectures": [
-    "BertForMaskedLM"
-  ],
+  "_name_or_path": "emilyalsentzer/Bio_Discharge_Summary_BERT",
   "attention_probs_dropout_prob": 0.1,
   "classifier_dropout": null,
-  "gradient_checkpointing": false,
   "hidden_act": "gelu",
   "hidden_dropout_prob": 0.1,
   "hidden_size": 768,
