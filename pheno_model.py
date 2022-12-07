@@ -7,7 +7,7 @@ NUM_LSTM_LAYERS = 2
 
 
 class PhenoPredictor(torch.nn.Module):
-    def __init__(self, n_class, bert_name, use_pretrained=True, lstm_head=False):
+    def __init__(self, n_class, bert_name, use_pretrained=True, lstm_head=False, avg_cls=False, agg_sigmoid=False):
         super().__init__()
         self.n_class = n_class
         if use_pretrained:
@@ -24,6 +24,8 @@ class PhenoPredictor(torch.nn.Module):
                 num_layers=NUM_LSTM_LAYERS)
         else:
             self.lstm_ensemble = None
+        self.agg_sigmoid = agg_sigmoid  # if true, use the combination of sigmoids
+        self.avg_cls = avg_cls    # if true, just average cls tokens
         self.classifier = torch.nn.Linear(self.bert.config.hidden_size, self.n_class)
         self.sigmoid = torch.nn.Sigmoid()
         self.device = "cuda:0" if torch.cuda.is_available() else "cpu"
@@ -47,10 +49,16 @@ class PhenoPredictor(torch.nn.Module):
                 output_cls_token, (hn, cn) = self.lstm_ensemble(cls_tokens)
                 # print('LSTM output shape:', output_cls_token.shape)
                 cls_tokens = output_cls_token[-1:]  # Take token at last time step.
+            if self.avg_cls:
+                cls_tokens = torch.mean(cls_tokens, dim=0)
             cls_tokens = self.classifier(cls_tokens)
             cls_tokens = self.sigmoid(cls_tokens)
             # print("CLS TOKEN 2", cls_tokens.shape)
-            cls_tokens = torch.mean(cls_tokens, dim=0)
+            if self.agg_sigmoid:
+                cls_tokens = cls_tokens - 0.5
+                cls_tokens = self.sigmoid(cls_tokens)
+            if not self.avg_cls:
+                cls_tokens = torch.mean(cls_tokens, dim=0)
             final_output.append(cls_tokens.unsqueeze(0))
             # print("CLS TOKEN", cls_tokens.shape)
 

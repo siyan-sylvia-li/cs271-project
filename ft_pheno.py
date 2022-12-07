@@ -180,6 +180,8 @@ if __name__ == "__main__":
     parser.add_argument("--exp_name", type=str, default="bert")
     parser.add_argument("--ft_mode", default="classifier")
     parser.add_argument("--lstm_head", action="store_true")
+    parser.add_argument("--avg_cls", action="store_true")
+    parser.add_argument("--agg_sigmoid", action="store_true")
     parser.add_argument("--batch_size", type=int, default=8)
     parser.add_argument("--epochs", type=int, default=10)
     parser.add_argument("--bert_name", default="bert-base-cased")
@@ -198,7 +200,7 @@ if __name__ == "__main__":
 
     model = PhenoPredictor(
         14, args.bert_name, use_pretrained=(not args.baseline_bert),
-        lstm_head=args.lstm_head)
+        lstm_head=args.lstm_head, agg_sigmoid=args.agg_sigmoid, avg_cls=args.avg_cls)
     model.to(DEVICE)
 
     tokenizer = AutoTokenizer.from_pretrained(args.bert_name)
