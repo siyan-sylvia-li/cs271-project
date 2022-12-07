@@ -1,3 +1,4 @@
+import random
 from collections import defaultdict
 import glob
 import json
@@ -55,7 +56,7 @@ def plot_metric_over_epochs(results, metric, fig_dir, line_types):
     plt.savefig(os.path.join(fig_dir, f'{metric}.png'), dpi=300, bbox_inches='tight')
 
 
-def plot_metric_over_phenotypes(results, is_train, metric, fig_dir, hatch_types):
+def plot_metric_over_phenotypes(results, is_train, metric, fig_dir):
     """Plots final metric value of all models on different phenotypes.
 
     Args:
@@ -64,7 +65,7 @@ def plot_metric_over_phenotypes(results, is_train, metric, fig_dir, hatch_types)
         'size': 15,
     }
     matplotlib.rc('font', **font)
-    fig = plt.figure(figsize=(30, 15))
+    fig = plt.figure(figsize=(30, 20))
     fig.suptitle(f'{"Train" if is_train else "Evaluation"} {name_mapping[metric]}', fontsize=28)
     frame1 = plt.gca()
     frame1.axes.xaxis.set_visible(False)
@@ -73,7 +74,8 @@ def plot_metric_over_phenotypes(results, is_train, metric, fig_dir, hatch_types)
     models = sorted(list(results.keys()))
     np.random.seed(9)
     colors = np.random.rand(len(models), 3).tolist()
-    hatches = [hatch_types[model.split(' - ')[0]] for model in models]
+    print(models)
+    hatches = [random.choice(all_hatch_types) for _ in models]
     # accs = defaultdict(float)
     for i, p in enumerate(data_util.PHENOTYPE_NAMES):
         full_metric_name = f'{"tr" if is_train else "eval"}_{p}_{metric}'
@@ -93,23 +95,15 @@ def plot_metric_over_phenotypes(results, is_train, metric, fig_dir, hatch_types)
     #     print(k, f'{v:.03f}')
     handles = [plt.Rectangle(
         (0,0),1,1, facecolor=colors[i], edgecolor='black', alpha=0.5, hatch=hatches[i]) for i in range(len(colors))]
-    plt.legend(handles, models, bbox_to_anchor=(2.5, 0.5), loc='right')
+    plt.legend(handles, models, bbox_to_anchor=(-0.5, -0.8), loc='lower center', ncols=3)
     plt.savefig(os.path.join(fig_dir, f'{"tr" if is_train else "eval"}_{metric}_by_phenotypes.png'), dpi=300, bbox_inches='tight')
 
 
 if __name__ == "__main__":
     RESULT_DIR = "results"
     FIG_DIR = "figs"
-    line_types = {
-        "bert-mini": "-",
-        "bert-base-cased": "-.",
-        "bio+clinicalbert": "--",
-    }
-    hatch_types = {
-        "bert-mini": "+",
-        "bert-base-cased": "x",
-        "bio+clinicalbert": ".",
-    }
+    random.seed(42)
+    all_hatch_types = ['+', 'x', '.', 'o', '']
     results = {}
     for f in glob.glob(os.path.join(RESULT_DIR, "*/*.json")):
         fattrs = parse_attrs(f)
@@ -125,7 +119,7 @@ if __name__ == "__main__":
     # plot_metric_over_epochs(results, "tr_avg_f1s_weighted", FIG_DIR, line_types)
     # plot_metric_over_epochs(results, "eval_avg_f1s_weighted", FIG_DIR, line_types)
 
-    plot_metric_over_phenotypes(results, is_train=False, metric="accs", fig_dir=FIG_DIR, hatch_types=hatch_types)
-    plot_metric_over_phenotypes(results, is_train=False, metric="f1_weighted", fig_dir=FIG_DIR, hatch_types=hatch_types)
-    plot_metric_over_phenotypes(results, is_train=False, metric="f1_macro", fig_dir=FIG_DIR, hatch_types=hatch_types)
-    plot_metric_over_phenotypes(results, is_train=False, metric="f1_micro", fig_dir=FIG_DIR, hatch_types=hatch_types)
+    plot_metric_over_phenotypes(results, is_train=False, metric="accs", fig_dir=FIG_DIR)
+    plot_metric_over_phenotypes(results, is_train=False, metric="f1_weighted", fig_dir=FIG_DIR)
+    plot_metric_over_phenotypes(results, is_train=False, metric="f1_macro", fig_dir=FIG_DIR)
+    plot_metric_over_phenotypes(results, is_train=False, metric="f1_micro", fig_dir=FIG_DIR)
