@@ -12,7 +12,7 @@ class PhenoPredictor(torch.nn.Module):
         self.n_class = n_class
         if use_pretrained:
             self.bert = BertModel.from_pretrained(bert_name)
-            self.bert.config.save_pretrained(save_directory='config')
+            #self.bert.config.save_pretrained(save_directory='config')
         else:
             # Create BERT model without using pretrained weights.
             config = BertConfig.from_pretrained(BERT_CONFIG_FILE)

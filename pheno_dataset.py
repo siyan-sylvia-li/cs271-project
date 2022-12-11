@@ -29,7 +29,7 @@ class PhenoDataset(Dataset):
     def __init__(self, data_ids, tokenizer, max_len=128):
         self.data_ids = data_ids
         self.tokenizer = tokenizer
-        self.max_len = 128
+        self.max_len = max_len
 
     def tokenize_function(self, examples):
         return self.tokenizer(examples["text"], padding="max_length", truncation=True)
