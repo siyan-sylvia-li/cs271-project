@@ -13,7 +13,7 @@ from transformers import AutoTokenizer
 
 DATA_DIR = 'data/'
 DATASET_PATH = os.path.join(DATA_DIR, 'discharge_tokenized_dataset.csv')
-NUM_CHUNKS = 15
+NUM_CHUNKS = 40
 
 
 # def process_text(text):
@@ -21,6 +21,8 @@ NUM_CHUNKS = 15
 #     text_splts = text.split(" ")
 #     text_splts = [x for x in text_splts if len(x)]
 #     return " ".join(text_splts)
+
+lens = []
 
 class PhenoDataset(Dataset):
     def __init__(self, data_ids, tokenizer, max_len=128):
@@ -52,19 +54,25 @@ class PhenoDataset(Dataset):
             return_tensors='pt'
         )
 
-        print(len(final_note['input_ids']), final_note['input_ids'].shape)
+        # print(len(final_note['input_ids']), final_note['input_ids'].shape)
+        lens.append(len(final_note['input_ids']))
+        
+        if len(final_note['input_ids']) > NUM_CHUNKS:
+            for k in final_note:
+                final_note[k] = final_note[k][:NUM_CHUNKS]
+            final_note.update({"orig_len": NUM_CHUNKS})
+        else:
+            to_pad = NUM_CHUNKS - len(final_note['input_ids'])
 
-        to_pad = 60 - len(final_note['input_ids'])
+            for k in final_note:
+                if len(final_note[k].shape) == 2:
+                    padding = torch.zeros((to_pad, self.max_len), dtype=torch.long)
+                    final_note[k] = torch.cat([torch.LongTensor(final_note[k]), padding])
+                else:
+                    padding = torch.zeros((to_pad,), dtype=torch.long)
+                    final_note[k] = torch.cat([final_note[k], padding])
 
-        for k in final_note:
-            if len(final_note[k].shape) == 2:
-                padding = torch.zeros((to_pad, self.max_len), dtype=torch.long)
-                final_note[k] = torch.cat([torch.LongTensor(final_note[k]), padding])
-            else:
-                padding = torch.zeros((to_pad,), dtype=torch.long)
-                final_note[k] = torch.cat([final_note[k], padding])
-
-        final_note.update({"orig_len": 60 - to_pad})
+            final_note.update({"orig_len": NUM_CHUNKS - to_pad})
 
         # print("NOTES", len(notes), final_note['input_ids'].shape)
         # if len(notes) != len(final_note['input_ids']):
@@ -103,12 +111,14 @@ if __name__ == "__main__":
     # Dataset tester
     data_ids_total = pickle.load(open("data_ids.p", "rb"))
     val_set = data_ids_total['val']
-    tokenizer = BertTokenizer.from_pretrained("bert-base-cased")
+    tokenizer = AutoTokenizer.from_pretrained("bert-base-cased")
+    a = 0
     for k in ['train', 'val', 'test']:
         set_data = data_ids_total[k]
         dset = PhenoDataset(set_data, tokenizer)
         loader = torch.utils.data.DataLoader(dset)
         for d in loader:
-            print(d[1].shape)
+            a=a+1
+    print(max(lens), min(lens), sum(lens)/len(lens))
     # dataset_val = PhenoDataset(val_set, tokenizer)
     # loader = torch.utils.data.DataLoader(dataset_val)
