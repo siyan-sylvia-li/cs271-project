@@ -10,10 +10,11 @@ from data_util import get_data
 import pandas as pd
 import os
 from transformers import AutoTokenizer
+import statistics
 
 DATA_DIR = 'data/'
 DATASET_PATH = os.path.join(DATA_DIR, 'discharge_tokenized_dataset.csv')
-NUM_CHUNKS = 40
+NUM_CHUNKS = 15
 
 
 # def process_text(text):
@@ -50,29 +51,35 @@ class PhenoDataset(Dataset):
             truncation=True,
             stride=self.max_len // 8,
             padding="max_length",
-            return_overflowing_tokens=True,
-            return_tensors='pt'
+            return_overflowing_tokens=True
         )
 
-        # print(len(final_note['input_ids']), final_note['input_ids'].shape)
-        lens.append(len(final_note['input_ids']))
-        
-        if len(final_note['input_ids']) > NUM_CHUNKS:
-            for k in final_note:
-                final_note[k] = final_note[k][:NUM_CHUNKS]
-            final_note.update({"orig_len": NUM_CHUNKS})
-        else:
+        if len(final_note['input_ids']) < NUM_CHUNKS:
             to_pad = NUM_CHUNKS - len(final_note['input_ids'])
 
             for k in final_note:
-                if len(final_note[k].shape) == 2:
-                    padding = torch.zeros((to_pad, self.max_len), dtype=torch.long)
-                    final_note[k] = torch.cat([torch.LongTensor(final_note[k]), padding])
+                if k == 'overflow_to_sample_mapping':
+                    padding = torch.zeros((to_pad), dtype=torch.long)
                 else:
-                    padding = torch.zeros((to_pad,), dtype=torch.long)
-                    final_note[k] = torch.cat([final_note[k], padding])
+                    padding = torch.zeros((to_pad, self.max_len), dtype=torch.long)
+                final_note[k] = torch.cat([torch.LongTensor(final_note[k]), padding])
 
             final_note.update({"orig_len": NUM_CHUNKS - to_pad})
+        elif len(final_note['input_ids']) > NUM_CHUNKS:
+            selected_chunks = np.sort(np.random.choice(
+                range(len(final_note['input_ids'])), size=NUM_CHUNKS, replace=False))
+
+            for k in final_note:
+                if k == 'overflow_to_sample_mapping':
+                    final_note[k] = torch.LongTensor(
+                        [final_note[k][i] for i in selected_chunks])
+                else:
+                    final_note[k] = torch.vstack(
+                        [torch.LongTensor(final_note[k][i]) for i in selected_chunks])
+
+            final_note.update({"orig_len": NUM_CHUNKS})
+        else:
+            final_note.update({"orig_len": NUM_CHUNKS})
 
         # print("NOTES", len(notes), final_note['input_ids'].shape)
         # if len(notes) != len(final_note['input_ids']):
@@ -120,5 +127,6 @@ if __name__ == "__main__":
         for d in loader:
             a=a+1
     print(max(lens), min(lens), sum(lens)/len(lens))
+    print(statistics.median(lens))
     # dataset_val = PhenoDataset(val_set, tokenizer)
     # loader = torch.utils.data.DataLoader(dataset_val)
