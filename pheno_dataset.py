@@ -48,15 +48,23 @@ class PhenoDataset(Dataset):
             truncation=True,
             stride=self.max_len // 8,
             padding="max_length",
+            return_overflowing_tokens=True,
+            return_tensors='pt'
         )
 
-        to_pad = 15 - len(final_note['input_ids'])
+        print(len(final_note['input_ids']), final_note['input_ids'].shape)
+
+        to_pad = 60 - len(final_note['input_ids'])
 
         for k in final_note:
-            padding = torch.zeros((to_pad, self.max_len), dtype=torch.long)
-            final_note[k] = torch.cat([torch.LongTensor(final_note[k]), padding])
+            if len(final_note[k].shape) == 2:
+                padding = torch.zeros((to_pad, self.max_len), dtype=torch.long)
+                final_note[k] = torch.cat([torch.LongTensor(final_note[k]), padding])
+            else:
+                padding = torch.zeros((to_pad,), dtype=torch.long)
+                final_note[k] = torch.cat([final_note[k], padding])
 
-        final_note.update({"orig_len": 15 - to_pad})
+        final_note.update({"orig_len": 60 - to_pad})
 
         # print("NOTES", len(notes), final_note['input_ids'].shape)
         # if len(notes) != len(final_note['input_ids']):
