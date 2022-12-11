@@ -124,7 +124,7 @@ def ft_bert():
         tr_f1s = defaultdict(lambda: defaultdict(int))
         tr_avg_f1s = 0
         for data, label in train_loader:
-            data = {k: v.to(DEVICE) for k, v in data.items()}
+            # data = {k: v.to(DEVICE) for k, v in data.items()}
             label = label.to(DEVICE)
             outputs = model(data)
             loss = be(outputs, label)

@@ -51,7 +51,8 @@ class PhenoDataset(Dataset):
             truncation=True,
             stride=self.max_len // 8,
             padding="max_length",
-            return_overflowing_tokens=True
+            return_overflowing_tokens=True,
+            return_tensors='pt'
         )
 
         if len(final_note['input_ids']) < NUM_CHUNKS:
