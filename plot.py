@@ -76,7 +76,7 @@ def plot_metric_over_phenotypes(results, is_train, metric, fig_dir):
     colors = np.random.rand(len(models), 3).tolist()
     print(models)
     hatches = [random.choice(all_hatch_types) for _ in models]
-    # accs = defaultdict(float)
+    accs = defaultdict(float)
     for i, p in enumerate(data_util.PHENOTYPE_NAMES):
         full_metric_name = f'{"tr" if is_train else "eval"}_{p}_{metric}'
         ax = fig.add_subplot(3, 5, i + 1)
@@ -87,12 +87,12 @@ def plot_metric_over_phenotypes(results, is_train, metric, fig_dir):
         x_axis = ax.axes.get_xaxis()
         x_axis.set_visible(False)
         ax.set_ylim(0.5, 1)
-    #     for m in models:
-    #         accs[m] += results[m][full_metric_name][-1]
-    # for k in accs:
-    #     accs[k] = accs[k] / len(data_util.PHENOTYPE_NAMES)
-    # for k, v in accs.items():
-    #     print(k, f'{v:.03f}')
+        for m in models:
+            accs[m] += results[m][full_metric_name][-1]
+    for k in accs:
+        accs[k] = accs[k] / len(data_util.PHENOTYPE_NAMES)
+    for k, v in accs.items():
+        print(k, f'{v:.03f}')
     handles = [plt.Rectangle(
         (0,0),1,1, facecolor=colors[i], edgecolor='black', alpha=0.5, hatch=hatches[i]) for i in range(len(colors))]
     plt.legend(handles, models, bbox_to_anchor=(-0.5, -0.8), loc='lower center', ncols=3)
@@ -119,7 +119,11 @@ if __name__ == "__main__":
     # plot_metric_over_epochs(results, "tr_avg_f1s_weighted", FIG_DIR, line_types)
     # plot_metric_over_epochs(results, "eval_avg_f1s_weighted", FIG_DIR, line_types)
 
+    print("ACCURACIES ==================")
     plot_metric_over_phenotypes(results, is_train=False, metric="accs", fig_dir=FIG_DIR)
+    print("F1 WEIGHTED ===================")
     plot_metric_over_phenotypes(results, is_train=False, metric="f1_weighted", fig_dir=FIG_DIR)
+    print("F1 MACRO =================")
     plot_metric_over_phenotypes(results, is_train=False, metric="f1_macro", fig_dir=FIG_DIR)
+    print("F1 MICRO ==================")
     plot_metric_over_phenotypes(results, is_train=False, metric="f1_micro", fig_dir=FIG_DIR)
