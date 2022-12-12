@@ -74,7 +74,6 @@ def plot_metric_over_phenotypes(results, is_train, metric, fig_dir):
     models = sorted(list(results.keys()))
     np.random.seed(9)
     colors = np.random.rand(len(models), 3).tolist()
-    print(models)
     hatches = [random.choice(all_hatch_types) for _ in models]
     accs = defaultdict(float)
     for i, p in enumerate(data_util.PHENOTYPE_NAMES):
@@ -106,13 +105,14 @@ if __name__ == "__main__":
     all_hatch_types = ['+', 'x', '.', 'o', '']
     results = {}
     for f in glob.glob(os.path.join(RESULT_DIR, "*/*.json")):
-        fattrs = parse_attrs(f)
-        if fattrs["baseline_bert"] == "True":
-            id_plt = f"bert-mini - train from scratch (lr={fattrs['lr']})"
-        else:
-            id_plt = f'{fattrs["bert_name"]} - {name_mapping[fattrs["ft_mode"]]}'
-        result_json = json.load(open(f))
-        results.update({id_plt: result_json})
+        if "+lstm" in f:
+            fattrs = parse_attrs(f)
+            if fattrs["baseline_bert"] == "True":
+                id_plt = f"bert-mini - train from scratch (lr={fattrs['lr']})"
+            else:
+                id_plt = f'{fattrs["bert_name"]} - {name_mapping[fattrs["ft_mode"]]}'
+            result_json = json.load(open(f))
+            results.update({id_plt: result_json})
 
     # plot_metric_over_epochs(results, "tr_loss", FIG_DIR, line_types)
     # plot_metric_over_epochs(results, "eval_loss", FIG_DIR, line_types)
