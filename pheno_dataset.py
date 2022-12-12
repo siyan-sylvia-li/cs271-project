@@ -57,7 +57,6 @@ class PhenoDataset(Dataset):
 
         if len(final_note['input_ids']) < NUM_CHUNKS:
             to_pad = NUM_CHUNKS - len(final_note['input_ids'])
-
             for k in final_note:
                 if k == 'overflow_to_sample_mapping':
                     padding = torch.zeros((to_pad), dtype=torch.long)
